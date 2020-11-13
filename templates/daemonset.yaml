@@ -1,0 +1,52 @@
+---
+apiVersion: "apps/v1"
+kind: "DaemonSet"
+metadata:
+  labels:
+    app: {{ template "dockerlogindaemonset.fullname" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    heritage: "{{ .Release.Service }}"
+    release: "{{ .Release.Name }}"
+  name: {{ template "dockerlogindaemonset.fullname" . }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "dockerlogindaemonset.fullname" . }}
+  template:
+    metadata:
+      annotations:
+      labels:
+        app: {{ template "dockerlogindaemonset.fullname" . }}
+        release: "{{ .Release.Name }}"
+    spec:
+      containers:
+        - name: docker-login-daemonset
+          image: "{{ .Values.image }}:{{ .Values.tag }}"
+          command:
+            - sh
+          args:
+            - -c
+            - "while true; do timeout 5.0 sh -c 'cat /var/mount/secrets/pat | docker login -u $DOCKER_USER --password-stdin'; sleep 60; done"
+          env:
+          - name: DOCKER_USER
+            value: {{ .Values.docker.user }}
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: secret-volume
+              readOnly: true
+              mountPath: "/var/mount/secrets"
+            - name: dockersock
+              mountPath: "/var/run/docker.sock"
+      restartPolicy: "Always"
+      securityContext:
+      volumes:
+        - name: secret-volume
+          secret:
+            secretName: {{ template "dockerlogindaemonset.fullname" . }}
+        - name: dockersock
+          hostPath:
+            path: /var/run/docker.sock
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
